@@ -19,6 +19,11 @@ public class Main {
         main.monitorConfigurations = settingsManager.getConfig();
         main.settings = settingsManager.getSettings();
 
+        if (main.settings == null) {
+            System.err.println("Faulty configuration file");
+            System.exit(1);
+        }
+
         Runnable runnable = main::update;
         ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor();
         service.scheduleAtFixedRate(runnable, 0, main.settings.getRefreshRateInSeconds(), TimeUnit.SECONDS);
