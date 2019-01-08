@@ -24,8 +24,12 @@ public class Main {
         service.scheduleAtFixedRate(runnable, 0, main.settings.getRefreshRateInSeconds(), TimeUnit.SECONDS);
     }
 
+    /**
+     * Update the LEDs by capturing all screens, calculating the average colors of each tile and sending that data to the server
+     */
     private void update() {
         ArrayList<BufferedImage> screenshots = screenshotEachMonitor();
+
         for (int i = 0; i < screenshots.size(); i++) {
             if (monitorConfigurations.length != screenshots.size()) {
                 System.err.println("Not every monitor has a valid configuration");
@@ -35,6 +39,11 @@ public class Main {
             BufferedImage image = screenshots.get(i);
             MonitorConfiguration config = monitorConfigurations[i];
 
+            ArrayList<Color> top_from_left_to_right = new ArrayList<>();
+            ArrayList<Color> bottom_from_left_to_right = new ArrayList<>();
+            ArrayList<Color> left_from_top_to_bottom = new ArrayList<>();
+            ArrayList<Color> right_from_top_to_bottom = new ArrayList<>();
+
             // Calculate average for each tile
             int top_tile_width = image.getWidth() / config.getTop();
             int bottom_tile_width = image.getWidth() / config.getBottom();
@@ -43,25 +52,20 @@ public class Main {
             int horizontal_offset_top_bottom = (int) ((float) image.getHeight() * config.getOffset_top_bottom_pct());
             int vertical_offset_left_right = (int) ((float) image.getWidth() * config.getOffset_left_right_pct());
 
-            ArrayList<Color> top_from_left_to_right = new ArrayList<>();
-            ArrayList<Color> bottom_from_left_to_right = new ArrayList<>();
-            ArrayList<Color> left_from_top_to_bottom = new ArrayList<>();
-            ArrayList<Color> right_from_top_to_bottom = new ArrayList<>();
-
             for (int t = 0; t < config.getTop(); t++) {
-                top_from_left_to_right.add(averageColor(image, top_tile_width * t, 0, top_tile_width, horizontal_offset_top_bottom));
+                top_from_left_to_right.add(averageColor(image, top_tile_width * t, 0, top_tile_width, horizontal_offset_top_bottom, settings.getResolution()));
             }
 
             for (int b = 0; b < config.getBottom(); b++) {
-                bottom_from_left_to_right.add(averageColor(image, top_tile_width * b, image.getHeight() - horizontal_offset_top_bottom, bottom_tile_width, horizontal_offset_top_bottom));
+                bottom_from_left_to_right.add(averageColor(image, top_tile_width * b, image.getHeight() - horizontal_offset_top_bottom, bottom_tile_width, horizontal_offset_top_bottom, settings.getResolution()));
             }
 
             for (int l = 0; l < config.getLeft(); l++) {
-                left_from_top_to_bottom.add(averageColor(image, 0, left_tile_height * l, vertical_offset_left_right, left_tile_height));
+                left_from_top_to_bottom.add(averageColor(image, 0, left_tile_height * l, vertical_offset_left_right, left_tile_height, settings.getResolution()));
             }
 
             for (int r = 0; r < config.getRight(); r++) {
-                right_from_top_to_bottom.add(averageColor(image, image.getWidth() - vertical_offset_left_right, right_tile_height * r, vertical_offset_left_right, right_tile_height));
+                right_from_top_to_bottom.add(averageColor(image, image.getWidth() - vertical_offset_left_right, right_tile_height * r, vertical_offset_left_right, right_tile_height, settings.getResolution()));
             }
         }
 
@@ -97,7 +101,7 @@ public class Main {
      * @param height the height of the area to measure in
      * @return the average color of the measured range in the image
      */
-    private Color averageColor(BufferedImage image, int topLeftX, int topLeftY, int width, int height) {
+    private Color averageColor(BufferedImage image, int topLeftX, int topLeftY, int width, int height, int resolution) {
         int bottomRightX = topLeftX + width;
         int bottomRightY = topLeftY + height;
         long sumRed = 0, sumGreen = 0, sumBlue = 0;
