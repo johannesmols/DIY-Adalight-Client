@@ -4,6 +4,8 @@ public class MonitorConfiguration {
 
     private int top, bottom, left, right;
     private float offset_top_bottom_pct, offset_left_right_pct;
+    private String[] order;
+    private boolean[] inverted;
 
     public MonitorConfiguration() {
 
@@ -55,5 +57,21 @@ public class MonitorConfiguration {
 
     public void setOffset_left_right_pct(float offset_left_right_pct) {
         this.offset_left_right_pct = offset_left_right_pct;
+    }
+
+    public String[] getOrder() {
+        return order;
+    }
+
+    public void setOrder(String[] order) {
+        this.order = order;
+    }
+
+    public boolean[] getInverted() {
+        return inverted;
+    }
+
+    public void setInverted(boolean[] inverted) {
+        this.inverted = inverted;
     }
 }

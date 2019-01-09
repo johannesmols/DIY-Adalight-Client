@@ -1,9 +1,17 @@
 package mols.johannes;
 
+import com.google.gson.Gson;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.HttpClientBuilder;
+
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -26,7 +34,7 @@ public class Main {
 
         Runnable runnable = main::update;
         ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor();
-        service.scheduleAtFixedRate(runnable, 0, main.settings.getRefreshRateInSeconds(), TimeUnit.SECONDS);
+        service.scheduleAtFixedRate(runnable, 0, main.settings.getRefreshRateInMilliSeconds(), TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -72,14 +80,60 @@ public class Main {
             for (int r = 0; r < config.getRight(); r++) {
                 right_from_top_to_bottom.add(averageColor(image, image.getWidth() - vertical_offset_left_right, right_tile_height * r, vertical_offset_left_right, right_tile_height, settings.getResolution()));
             }
+
+            // Send information to the server
+            postUpdate(i, top_from_left_to_right, bottom_from_left_to_right, left_from_top_to_bottom, right_from_top_to_bottom, config.getOrder(), config.getInverted());
+        }
+    }
+
+    /***
+     * Post an update to the HTTP API running on the Raspberry Pi
+     * @param monitor the monitor number
+     * @param top the colors on the top
+     * @param bottom the colors on the bottom
+     * @param left the colors on the left
+     * @param right the colors on the right
+     * @param order the order of how the sides are wired
+     * @param inverted whether or not the list should be inverted if the wiring goes the opposite way of the logical calculations
+     */
+    private void postUpdate(int monitor, ArrayList<Color> top, ArrayList<Color> bottom, ArrayList<Color> left, ArrayList<Color> right, String[] order, boolean[] inverted) {
+        try {
+            String url = "http://" + settings.getIp() + ":" + settings.getPort() + "/update";
+            Gson gson = new Gson();
+            HttpClient httpClient = HttpClientBuilder.create().build();
+            HttpPost post = new HttpPost(url);
+            StringEntity postingString = new StringEntity(gson.toJson(
+                    new PostRequest(monitor, prepareColorArrayList(top), prepareColorArrayList(bottom), prepareColorArrayList(left), prepareColorArrayList(right), order, inverted)));
+            post.setEntity(postingString);
+            post.setHeader("Content-type", "application/json");
+            HttpResponse response = httpClient.execute(post);
+            System.out.println(response.getStatusLine());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    /***
+     * Convert Color Lists to nested lists so they can be converted into JSON by GSON
+     * @param list the list in question
+     * @return the nested list
+     */
+    private List<List<Integer>> prepareColorArrayList(ArrayList<Color> list) {
+        List<List<Integer>> preparedList = new ArrayList<>();
+        for (Color color : list) {
+            List<Integer> values = new ArrayList<>();
+            values.add(color.getRed());
+            values.add(color.getGreen());
+            values.add(color.getBlue());
+            preparedList.add(values);
         }
 
-        // Send information to the server
-        System.out.println("Update complete");
+        return preparedList;
     }
 
     /**
      * Take a screenshot of each connected monitor
+     * Note: On Linux Mint 19, the desktop is somehow considered to be black even with a desktop wallpaper
      * @return a list of screenshots for each connected monitor
      */
     private ArrayList<BufferedImage> screenshotEachMonitor() {

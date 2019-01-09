@@ -1,0 +1,42 @@
+[
+  {
+    "top": 20,
+    "bottom": 20,
+    "left": 10,
+    "right": 10,
+    "offset_top_bottom_pct": 0.25,
+    "offset_left_right_pct": 0.25,
+    "order": [
+    	"bottom",
+    	"left",
+    	"top",
+    	"right"
+    ],
+    "inverted": [
+    	true,
+    	true,
+    	false,
+    	false
+    ]
+  },
+  {
+    "top": 15,
+    "bottom": 15,
+    "left": 7,
+    "right": 7,
+    "offset_top_bottom_pct": 0.25,
+    "offset_left_right_pct": 0.25,
+    "order": [
+    	"bottom",
+    	"right",
+    	"top",
+    	"left"
+    ],
+    "inverted": [
+    	false,
+    	true,
+    	true,
+    	false
+    ]
+  }
+]
