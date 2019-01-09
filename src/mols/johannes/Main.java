@@ -109,7 +109,7 @@ public class Main {
             HttpResponse response = httpClient.execute(post);
             System.out.println(response.getStatusLine());
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println(e.getMessage());
         }
     }
 
@@ -138,7 +138,7 @@ public class Main {
      */
     private ArrayList<BufferedImage> screenshotEachMonitor() {
         ArrayList<BufferedImage> screenshots = new ArrayList<>();
-        for (GraphicsDevice gd : GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) { // Screenshot each monitor
+        for (GraphicsDevice gd : GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) {
             try {
                 Rectangle bounds = gd.getDefaultConfiguration().getBounds();
                 BufferedImage capture = new Robot().createScreenCapture(bounds);
@@ -158,21 +158,22 @@ public class Main {
      * @param topLeftY the top left corner of the rectangle to measure in, y coordinate
      * @param width the width of the area to measure in
      * @param height the height of the area to measure in
+     * @param resolution the resolution of the average, defines how many pixels are skipped each step
      * @return the average color of the measured range in the image
      */
     private Color averageColor(BufferedImage image, int topLeftX, int topLeftY, int width, int height, int resolution) {
         int bottomRightX = topLeftX + width;
         int bottomRightY = topLeftY + height;
         long sumRed = 0, sumGreen = 0, sumBlue = 0;
-        for (int x = topLeftX; x < bottomRightX; x++) {
-            for (int y = topLeftY; y < bottomRightY; y++) {
+        for (int x = topLeftX; x <= bottomRightX - resolution; x+=resolution) {
+            for (int y = topLeftY; y <= bottomRightY - resolution; y+=resolution) {
                 Color pixel = new Color(image.getRGB(x, y));
                 sumRed += pixel.getRed();
                 sumGreen += pixel.getGreen();
                 sumBlue += pixel.getBlue();
             }
         }
-        long pixels = width * height;
+        long pixels = (width / resolution) * (height / resolution);
         return new Color((int) (sumRed / pixels), (int) (sumGreen / pixels), (int) (sumBlue / pixels));
     }
 }
