@@ -3,6 +3,7 @@ package mols.johannes;
 import com.google.gson.Gson;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.HttpClientBuilder;
@@ -10,7 +11,9 @@ import org.apache.http.impl.client.HttpClientBuilder;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -20,6 +23,7 @@ public class Main {
 
     private MonitorConfiguration[] monitorConfigurations;
     private Settings settings;
+    private volatile boolean serverAvailable = false;
 
     public static void main(String[] args) throws IOException {
         Main main = new Main();
@@ -28,9 +32,20 @@ public class Main {
         main.settings = settingsManager.getSettings();
 
         if (main.settings == null) {
-            System.err.println("Faulty configuration file");
+            main.printError("Faulty configuration file");
             System.exit(1);
         }
+
+        do {
+            main.serverAvailable = main.checkServerAvailability();
+            if (!main.serverAvailable) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    main.printError(e);
+                }
+            }
+        } while (!main.serverAvailable);
 
         Runnable runnable = main::update;
         ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor();
@@ -38,14 +53,69 @@ public class Main {
     }
 
     /**
+     * Send a simple GET request to the server root and check whether it answers
+     * @return if the server responds
+     */
+    private boolean checkServerAvailability() {
+        try {
+            String url = "http://" + settings.getIp() + ":" + settings.getPort() + "/";
+            HttpClient httpClient = HttpClientBuilder.create().build();
+            HttpGet get = new HttpGet(url);
+            HttpResponse response = httpClient.execute(get);
+            printMessage("Availability Check: " + response.getStatusLine());
+            return response.getStatusLine().getStatusCode() == 200;
+        } catch (IOException e) {
+            printError("Server availability check failed");
+            printError(e);
+        }
+
+        return false;
+    }
+
+    /***
+     * Post an update to the HTTP API running on the Raspberry Pi
+     * @param monitor the monitor number
+     * @param top the colors on the top
+     * @param bottom the colors on the bottom
+     * @param left the colors on the left
+     * @param right the colors on the right
+     * @param order the order of how the sides are wired
+     * @param inverted whether or not the list should be inverted if the wiring goes the opposite way of the logical calculations
+     */
+    private void postUpdate(int monitor, ArrayList<Color> top, ArrayList<Color> bottom, ArrayList<Color> left, ArrayList<Color> right, String[] order, boolean[] inverted) {
+        try {
+            String url = "http://" + settings.getIp() + ":" + settings.getPort() + "/update";
+            Gson gson = new Gson();
+            HttpClient httpClient = HttpClientBuilder.create().build();
+            HttpPost post = new HttpPost(url);
+            StringEntity postingString = new StringEntity(gson.toJson(
+                    new PostRequest(monitor, prepareColorArrayList(top), prepareColorArrayList(bottom), prepareColorArrayList(left), prepareColorArrayList(right), order, inverted)));
+            post.setEntity(postingString);
+            post.setHeader("Content-type", "application/json");
+            HttpResponse response = httpClient.execute(post);
+            printMessage("Update: " + response.getStatusLine());
+        } catch (IOException e) {
+            printError("Couldn't post update to server. Idling until it is back online.");
+            printError(e);
+            serverAvailable = false;
+        }
+    }
+
+    /**
      * Update the LEDs by capturing all screens, calculating the average colors of each tile and sending that data to the server
      */
     private void update() {
+        // Check whether the server is reachable and try to reach it if it isn't
+        if (!serverAvailable) {
+            serverAvailable = checkServerAvailability();
+            return;
+        }
+
         ArrayList<BufferedImage> screenshots = screenshotEachMonitor();
 
         for (int i = 0; i < screenshots.size(); i++) {
             if (monitorConfigurations.length != screenshots.size()) {
-                System.err.println("Not every monitor has a valid configuration");
+                printError("Not every monitor has a valid configuration");
                 System.exit(1);
             }
 
@@ -83,33 +153,6 @@ public class Main {
 
             // Send information to the server
             postUpdate(i, top_from_left_to_right, bottom_from_left_to_right, left_from_top_to_bottom, right_from_top_to_bottom, config.getOrder(), config.getInverted());
-        }
-    }
-
-    /***
-     * Post an update to the HTTP API running on the Raspberry Pi
-     * @param monitor the monitor number
-     * @param top the colors on the top
-     * @param bottom the colors on the bottom
-     * @param left the colors on the left
-     * @param right the colors on the right
-     * @param order the order of how the sides are wired
-     * @param inverted whether or not the list should be inverted if the wiring goes the opposite way of the logical calculations
-     */
-    private void postUpdate(int monitor, ArrayList<Color> top, ArrayList<Color> bottom, ArrayList<Color> left, ArrayList<Color> right, String[] order, boolean[] inverted) {
-        try {
-            String url = "http://" + settings.getIp() + ":" + settings.getPort() + "/update";
-            Gson gson = new Gson();
-            HttpClient httpClient = HttpClientBuilder.create().build();
-            HttpPost post = new HttpPost(url);
-            StringEntity postingString = new StringEntity(gson.toJson(
-                    new PostRequest(monitor, prepareColorArrayList(top), prepareColorArrayList(bottom), prepareColorArrayList(left), prepareColorArrayList(right), order, inverted)));
-            post.setEntity(postingString);
-            post.setHeader("Content-type", "application/json");
-            HttpResponse response = httpClient.execute(post);
-            System.out.println(response.getStatusLine());
-        } catch (IOException e) {
-            System.err.println(e.getMessage());
         }
     }
 
@@ -175,5 +218,20 @@ public class Main {
         }
         long pixels = (width / resolution) * (height / resolution);
         return new Color((int) (sumRed / pixels), (int) (sumGreen / pixels), (int) (sumBlue / pixels));
+    }
+
+    private void printMessage(String message) {
+        String timestamp = new SimpleDateFormat("HH:mm:ss").format(new Date());
+        System.out.println("[" + timestamp + "] " + message);
+    }
+
+    private void printError(Exception e) {
+        String timestamp = new SimpleDateFormat("HH:mm:ss").format(new Date());
+        System.err.println("[" + timestamp + "] " + e.getMessage());
+    }
+
+    private void printError(String message) {
+        String timestamp = new SimpleDateFormat("HH:mm:ss").format(new Date());
+        System.err.println("[" + timestamp + "] " + message);
     }
 }
